@@ -25,7 +25,7 @@ export default function ManageInvoicesScreen() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const fadeAnims = useState(invoices.map(() => new Animated.Value(0)))[0];
+  const [fadeAnims, setFadeAnims] = useState<Animated.Value[]>([]);
 
   // Load user_id
   useEffect(() => {
@@ -64,14 +64,7 @@ export default function ManageInvoicesScreen() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setInvoices(data);
-        // Initialize fade animations
-        fadeAnims.forEach((anim) => {
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }).start();
-        });
+        setFadeAnims(data.map(() => new Animated.Value(0)));
       } else {
         throw new Error("Invalid response format");
       }
@@ -83,6 +76,16 @@ export default function ManageInvoicesScreen() {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fadeAnims.forEach((anim) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [fadeAnims]);
 
   // Render invoice card
   const renderInvoice = ({ item, index }) => (
