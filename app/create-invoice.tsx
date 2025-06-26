@@ -53,6 +53,7 @@ export default function CreateInvoiceScreen() {
   });
   const [loading, setLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [itemFadeAnims, setItemFadeAnims] = useState<Animated.Value[]>([]);
 
   // Load user_id, clients, and generate invoice number
   useEffect(() => {
@@ -119,6 +120,21 @@ export default function CreateInvoiceScreen() {
   const handleRemoveItem = (idx) => {
     setItems(items.filter((_, i) => i !== idx));
   };
+
+  // Refresh item fade animations whenever item count changes
+  useEffect(() => {
+    setItemFadeAnims(items.map(() => new Animated.Value(0)));
+  }, [items.length]);
+
+  useEffect(() => {
+    itemFadeAnims.forEach((anim) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [itemFadeAnims]);
 
   // Handle new item input changes
   const handleChangeNewItem = (key, value) => {
@@ -282,7 +298,10 @@ export default function CreateInvoiceScreen() {
           <Text style={styles.emptyText}>No items added. Add an item below.</Text>
         ) : (
           items.map((item, idx) => (
-            <Animated.View key={idx} style={[styles.itemCard, { opacity: fadeAnim }]}>
+            <Animated.View
+              key={idx}
+              style={[styles.itemCard, { opacity: itemFadeAnims[idx] || 1 }]}
+            >
               <View style={styles.itemRow}>
                 <Ionicons name="cube-outline" size={24} color="#8b5cf6" style={styles.icon} />
                 <Text style={styles.itemText}>{item.description}</Text>
