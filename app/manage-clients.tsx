@@ -32,7 +32,7 @@ export default function ManageClientsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
-  const fadeAnims = useState(clients.map(() => new Animated.Value(0)))[0];
+  const [fadeAnims, setFadeAnims] = useState<Animated.Value[]>([]);
 
   // Load user_id
   useEffect(() => {
@@ -63,14 +63,7 @@ export default function ManageClientsScreen() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setClients(data);
-        // Initialize animations
-        fadeAnims.forEach((anim) => {
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }).start();
-        });
+        setFadeAnims(data.map(() => new Animated.Value(0)));
       } else {
         throw new Error("Invalid response");
       }
@@ -82,6 +75,16 @@ export default function ManageClientsScreen() {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fadeAnims.forEach((anim) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [fadeAnims]);
 
   const handleDelete = (clientId) => {
     Alert.alert(
