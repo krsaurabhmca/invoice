@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 export default function AddPaymentScreen() {
   const { invoice_id } = useLocalSearchParams();
@@ -70,7 +71,13 @@ export default function AddPaymentScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.header}>Add Payment</Text>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+            <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add Payment</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
         <View style={styles.card}>
           <Text style={styles.label}>Payment Date</Text>
@@ -149,8 +156,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#18181b",
     minHeight: "100%",
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: fontSizes.header,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+    flex: 1,
+  },
   header: {
-    fontSize: 28,
+    fontSize: fontSizes.header,
     fontWeight: "bold",
     color: "#fff",
     marginBottom: 16,

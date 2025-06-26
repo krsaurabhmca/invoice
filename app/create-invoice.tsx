@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,7 +18,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { fonts } from "./theme";
+import { fonts, fontSizes } from "./theme";
 
 // Utility function for date formatting (YYYY-MM-DD)
 const formatDate = (date) => {
@@ -56,6 +57,7 @@ export default function CreateInvoiceScreen() {
   const [loading, setLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [itemFadeAnims, setItemFadeAnims] = useState<Animated.Value[]>([]);
+  const router = useRouter();
 
   // Load user_id, clients, and generate invoice number
   useEffect(() => {
@@ -211,7 +213,13 @@ export default function CreateInvoiceScreen() {
       >
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Header */}
-        <Text style={styles.header}>Create New Invoice</Text>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+            <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create Invoice</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
         {/* Client & Invoice Details */}
         <View style={styles.card}>
@@ -225,6 +233,7 @@ export default function CreateInvoiceScreen() {
                 style={styles.picker}
                 dropdownIconColor="#f8fafc"
                 itemStyle={styles.pickerItem}
+                mode="dropdown"
               >
                 <Picker.Item label="Select a Client" value="" />
                 {clients.map((client) => (
@@ -424,8 +433,20 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     backgroundColor: "#0f172a",
   },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontSize: fontSizes.header,
+    fontWeight: "700",
+    color: "#f8fafc",
+    fontFamily: fonts.mono,
+  },
   header: {
-    fontSize: 32,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#f8fafc",
     fontFamily: fonts.mono,

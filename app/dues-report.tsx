@@ -16,6 +16,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 export default function DuesReportScreen() {
   const [user, setUser] = useState(null);
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 24,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#fff",
     textAlign: "center",

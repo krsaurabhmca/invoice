@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 // Utility function to format currency
 const formatCurrency = (value) => {
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#18181b",
   },
   header: {
-    fontSize: 28,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#fff",
     flex: 1,

@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 export default function AddClientScreen() {
   const [userId, setUserId] = useState(null);
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#facc15",
   },

@@ -11,3 +11,7 @@ export const fonts = {
   regular: 'System',
   mono: 'SpaceMono',
 };
+
+export const fontSizes = {
+  header: 24,
+};

@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 // Utility function to get client initials
 const getInitials = (name) => {
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#fff",
   },

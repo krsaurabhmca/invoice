@@ -30,6 +30,17 @@ export default function LoginScreen() {
   const [cardAnim] = useState(new Animated.Value(50));
   const router = useRouter();
 
+  // Redirect if already logged in
+  useEffect(() => {
+    (async () => {
+      const userJson = await AsyncStorage.getItem("user");
+      const user = userJson ? JSON.parse(userJson) : null;
+      if (user?.id) {
+        router.replace("/dashboard");
+      }
+    })();
+  }, []);
+
   // Animate on mount
   useEffect(() => {
     Animated.parallel([

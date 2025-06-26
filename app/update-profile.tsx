@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { fontSizes } from "./theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const USER_STORAGE_KEY = "@invoiceApp:user";
@@ -438,7 +439,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#facc15",
   },

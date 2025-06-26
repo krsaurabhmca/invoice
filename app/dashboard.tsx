@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { fonts } from "./theme";
+import { fonts, fontSizes } from "./theme";
 
 const USER_STORAGE_KEY = "@invoiceApp:user";
 
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: fontSizes.header,
     fontWeight: "700",
     color: "#facc15",
     fontFamily: fonts.mono,

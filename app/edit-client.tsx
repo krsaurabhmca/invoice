@@ -12,8 +12,9 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+  View,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 export default function EditClientScreen() {
   const router = useRouter();
@@ -181,7 +182,7 @@ const styles = StyleSheet.create({
     minHeight: "100%",
   },
   header: {
-    fontSize: 30,
+    fontSize: fontSizes.header,
     fontWeight: "bold",
     color: "#fff",
     marginBottom: 22,

@@ -17,6 +17,7 @@ import {
   View,
   Animated,
 } from "react-native";
+import { fontSizes } from "./theme";
 
 export default function EditInvoiceScreen() {
    const [userId, setUserId] = useState(null);
@@ -232,7 +233,13 @@ export default function EditInvoiceScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.header}>Edit Invoice</Text>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+            <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Invoice</Text>
+          <View style={{ width: 24 }} />
+        </View>
         {/* CLIENT & INVOICE DETAILS */}
         <View style={styles.card}>
           <Text style={styles.label}>Client</Text>
@@ -429,8 +436,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#18181b",
     minHeight: "100%",
   },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: fontSizes.header,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+    flex: 1,
+  },
   header: {
-    fontSize: 28,
+    fontSize: fontSizes.header,
     fontWeight: "bold",
     color: "#fff",
     marginBottom: 16,
