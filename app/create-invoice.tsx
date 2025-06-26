@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,77 +17,105 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { fonts, fontSizes } from "./theme";
+import { fontSizes } from "./theme";
 
-// Utility function for date formatting (YYYY-MM-DD)
-const formatDate = (date) => {
-  return date.toISOString().split("T")[0];
+// Custom timeout function for fetch
+const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  }
 };
 
-// Utility function for generating invoice number
-const generateInvoiceNumber = (userId) => {
+// Generate client-side invoice number
+const generateInvoiceNumber = () => {
   const date = new Date();
-  const datePrefix = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, "0")}${date
-    .getDate()
-    .toString()
-    .padStart(2, "0")}`;
-  const sequence = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-  return `INV-${datePrefix}-${userId || "UNKNOWN"}-${sequence}`;
+  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  const randomStr = Math.random().toString(36).substr(2, 4).toUpperCase(); // 4-char random string
+  return `INV-${dateStr}-${randomStr}`;
 };
 
 export default function CreateInvoiceScreen() {
-  // State
   const [userId, setUserId] = useState(null);
   const [clients, setClients] = useState([]);
   const [clientId, setClientId] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState(generateInvoiceNumber());
   const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [dueDate, setDueDate] = useState(new Date());
   const [showInvoiceDate, setShowInvoiceDate] = useState(false);
   const [showDueDate, setShowDueDate] = useState(false);
-  const [items, setItems] = useState([]);
-  const [newItem, setNewItem] = useState({
-    description: "",
-    quantity: "1",
-    unit_price: "0",
-    discount: "0",
-    tax: "0",
-  });
-  const [loading, setLoading] = useState(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [itemFadeAnims, setItemFadeAnims] = useState<Animated.Value[]>([]);
+  const [items, setItems] = useState([
+    {
+      description: "",
+      quantity: "1",
+      unit_price: "0",
+      discount: "0",
+      tax: "0", // Changed from tax_percent to tax
+    },
+  ]);
+  const [loading, setLoading] = useState(true);
+  const [itemFadeAnims, setItemFadeAnims] = useState([]);
   const router = useRouter();
 
-  // Load user_id, clients, and generate invoice number
+  // Fetch user and clients
   useEffect(() => {
-    (async () => {
+    setLoading(true);
+    const fetchData = async () => {
       try {
         const userJson = await AsyncStorage.getItem("user");
         const user = userJson ? JSON.parse(userJson) : null;
-        setUserId(user?.id);
-        if (user?.id) {
-          const res = await fetch(
-            `https://offerplant.com/invoice/get_clients.php?user_id=${user.id}`
-          );
-          const data = await res.json();
-          setClients(Array.isArray(data) ? data : []);
-          setInvoiceNumber(generateInvoiceNumber(user.id));
+        if (!user?.id) {
+          Alert.alert("Error", "User not found. Please log in again.");
+          return;
         }
-      } catch (e) {
-        Alert.alert("Error", "Failed to load user info or clients. Please try again.");
-      }
-    })();
+        setUserId(user.id);
 
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
+        const response = await fetchWithTimeout(
+          `https://offerplant.com/invoice/get_clients.php?user_id=${user.id}`,
+          {},
+          10000
+        );
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error("Invalid clients data");
+        }
+        setClients(data);
+
+        // Optional: Fetch suggested invoice number from API (uncomment if available)
+        /*
+        const invoiceNumRes = await fetchWithTimeout(
+          `https://offerplant.com/invoice/get_next_invoice_number.php?user_id=${user.id}`,
+          {},
+          10000
+        );
+        const invoiceNumData = await invoiceNumRes.json();
+        if (invoiceNumRes.ok && invoiceNumData.invoice_number) {
+          setInvoiceNumber(invoiceNumData.invoice_number);
+        } else {
+          setInvoiceNumber(generateInvoiceNumber()); // Fallback
+        }
+        */
+      } catch (err) {
+        Alert.alert("Error", err.message || "Failed to fetch clients.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  // Calculate totals
-  const getTotals = () => {
+  const getTotals = useMemo(() => {
     let subtotal = 0,
       totalDiscount = 0,
       totalTax = 0;
@@ -95,11 +123,11 @@ export default function CreateInvoiceScreen() {
       const q = parseFloat(item.quantity) || 0;
       const p = parseFloat(item.unit_price) || 0;
       const d = parseFloat(item.discount) || 0;
-      const t = parseFloat(item.tax) || 0;
+      const t = parseFloat(item.tax) || 0; // Changed to tax
       const lineTotal = q * p;
       subtotal += lineTotal;
       totalDiscount += d * q;
-      totalTax += ((lineTotal - d * q) * t) / 100;
+      totalTax += (lineTotal - d * q) * (t / 100);
     });
     const grandTotal = subtotal - totalDiscount + totalTax;
     return {
@@ -108,508 +136,600 @@ export default function CreateInvoiceScreen() {
       totalTax: totalTax.toFixed(2),
       grandTotal: grandTotal.toFixed(2),
     };
-  };
-
-  // Handle item addition
-  const handleAddItem = () => {
-    if (!newItem.description || !newItem.quantity || !newItem.unit_price) {
-      Alert.alert("Missing Info", "Please fill in description, quantity, and unit price.");
-      return;
-    }
-    setItems([...items, { ...newItem }]);
-    setNewItem({ description: "", quantity: "1", unit_price: "0", discount: "0", tax: "0" });
-  };
-
-  // Handle item removal
-  const handleRemoveItem = (idx) => {
-    setItems(items.filter((_, i) => i !== idx));
-  };
-
-  // Refresh item fade animations whenever items change
-  useEffect(() => {
-    setItemFadeAnims(items.map(() => new Animated.Value(0)));
   }, [items]);
+
+  const handleAddItem = useCallback(() => {
+    const newItem = {
+      description: "",
+      quantity: "1",
+      unit_price: "0",
+      discount: "0",
+      tax: "0", // Changed to tax
+    };
+    setItems((prev) => [...prev, newItem]);
+    setItemFadeAnims((prev) => [...prev, new Animated.Value(0)]);
+  }, []);
+
+  const handleRemoveItem = useCallback(
+    (idx) => {
+      if (items.length === 1) {
+        Alert.alert("Warning", "At least one item is required.");
+        return;
+      }
+      setItems((prev) => prev.filter((_, i) => i !== idx));
+      setItemFadeAnims((prev) => prev.filter((_, i) => i !== idx));
+    },
+    [items.length]
+  );
 
   useEffect(() => {
     itemFadeAnims.forEach((anim) => {
       Animated.timing(anim, {
         toValue: 1,
-        duration: 600,
+        duration: 300,
         useNativeDriver: true,
       }).start();
     });
+    return () => {
+      itemFadeAnims.forEach((anim) => anim.setValue(0));
+    };
   }, [itemFadeAnims]);
 
-  // Handle new item input changes
-  const handleChangeNewItem = (key, value) => {
-    setNewItem({ ...newItem, [key]: value });
-  };
+  const handleChangeItem = useCallback((idx, key, value) => {
+    if (["quantity", "unit_price", "discount", "tax"].includes(key)) {
+      if (value && !/^\d*\.?\d*$/.test(value)) {
+        return; // Only allow valid numbers
+      }
+    }
+    setItems((prev) => {
+      const newItems = [...prev];
+      newItems[idx][key] = value;
+      return newItems;
+    });
+  }, []);
 
-  // Validate form
+  const handleDateChange = useCallback(
+    (setter, showSetter) => (e, selectedDate) => {
+      showSetter(false);
+      if (e.type !== "dismissed" && selectedDate) {
+        setter(selectedDate);
+      }
+    },
+    []
+  );
+
   const validateFields = () => {
-    if (!clientId || !invoiceNumber || !invoiceDate || !dueDate) {
-      Alert.alert("Missing Info", "Please fill out all invoice details, including client and dates.");
+    if (!clientId) {
+      Alert.alert("Error", "Please select a client.");
       return false;
     }
-    if (items.length === 0 || !items.every((i) => i.description && i.quantity && i.unit_price)) {
-      Alert.alert("Incomplete Items", "Please add at least one item with complete details.");
+    if (!invoiceNumber) {
+      Alert.alert("Error", "Please enter an invoice number.");
+      return false;
+    }
+    if (!invoiceDate) {
+      Alert.alert("Error", "Please select an invoice date.");
+      return false;
+    }
+    if (!dueDate) {
+      Alert.alert("Error", "Please select a due date.");
+      return false;
+    }
+    if (
+      !items.every(
+        (i) =>
+          i.description &&
+          i.quantity &&
+          parseFloat(i.quantity) > 0 &&
+          i.unit_price &&
+          parseFloat(i.unit_price) >= 0 &&
+          i.tax &&
+          parseFloat(i.tax) >= 0 // Validate tax
+      )
+    ) {
+      Alert.alert("Error", "All item fields must be filled with valid values.");
       return false;
     }
     return true;
   };
 
-  // Submit invoice
   const handleSubmit = async () => {
     if (!validateFields()) return;
     setLoading(true);
     try {
-      const { grandTotal } = getTotals();
+      const { grandTotal } = getTotals;
       const payload = {
         user_id: userId,
-        client_id: clientId,
+        client_id: parseInt(clientId) || 0,
         invoice_number: invoiceNumber,
-        invoice_date: formatDate(invoiceDate),
-        due_date: formatDate(dueDate),
+        invoice_date: invoiceDate.toISOString().split("T")[0],
+        due_date: dueDate.toISOString().split("T")[0],
         total: parseFloat(grandTotal),
         items: items.map((i) => ({
           description: i.description,
           quantity: parseInt(i.quantity) || 1,
           unit_price: parseFloat(i.unit_price) || 0,
           discount: parseFloat(i.discount) || 0,
-          tax: parseFloat(i.tax) || 0,
+          tax: parseFloat(i.tax) || 0, // Changed to tax
         })),
       };
-      const response = await fetch("https://offerplant.com/invoice/create_invoice.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
+
+      const response = await fetchWithTimeout(
+        "https://offerplant.com/invoice/create_invoice.php",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        10000
+      );
+
+      // Debug: Log the raw response status and text
+      const responseText = await response.text();
+      console.log("API Response Status:", response.status);
+      console.log("API Response Text:", responseText);
+
+      // Check if response is empty
+      if (!responseText) {
+        throw new Error("Empty response from server");
+      }
+
+      // Attempt to parse JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("JSON Parse Error:", jsonError);
+        throw new Error("Invalid response format from server");
+      }
+
       if (response.ok && data.status === "invoice_created") {
-        Alert.alert("Success!", "Invoice created successfully! View it in your invoice list.");
-        setInvoiceNumber(generateInvoiceNumber(userId));
-        setInvoiceDate(new Date());
-        setDueDate(new Date());
-        setItems([]);
-        setClientId("");
+        Alert.alert("Success", "Invoice created successfully.", [
+          { text: "OK", onPress: () => router.back() },
+        ]);
       } else {
-        const msg = data.message || "Something went wrong while creating the invoice.";
-        Alert.alert("Failed to Create", msg);
+        const msg = data.message || "Failed to create invoice.";
+        Alert.alert("Error", msg, [
+          { text: "Cancel" },
+          { text: "Retry", onPress: handleSubmit },
+        ]);
       }
     } catch (e) {
-      Alert.alert("Connection Issue", "Couldn't connect to the server. Check your network and try again.");
+      console.error("Submit Error:", e);
+      Alert.alert("Error", e.message || "Could not connect to server.", [
+        { text: "Cancel" },
+        { text: "Retry", onPress: handleSubmit },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const totals = getTotals();
+  const totals = getTotals;
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#18181b",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color="#38bdf8" />
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#18181b" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ padding: 8 }}
+            accessible={true}
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Invoice</Text>
-          <View style={{ width: 24 }} />
+          <View style={styles.placeholder} />
         </View>
 
-        {/* Client & Invoice Details */}
+        {/* CLIENT & INVOICE DETAILS */}
         <View style={styles.card}>
-          {/* Client Picker */}
-          <View style={styles.inputRow}>
-            <Ionicons name="person-outline" size={24} color="#10b981" style={styles.icon} />
-            <View style={styles.pickerWrap}>
-              <Picker
-                selectedValue={clientId}
-                onValueChange={setClientId}
-                style={styles.picker}
-                dropdownIconColor="#f8fafc"
-                itemStyle={styles.pickerItem}
-                mode="dropdown"
-              >
-                <Picker.Item label="Select a Client" value="" />
-                {clients.map((client) => (
-                  <Picker.Item key={client.id} label={client.name} value={client.id} />
-                ))}
-              </Picker>
-            </View>
+          <Text style={styles.label}>Client</Text>
+          <View style={styles.pickerWrap}>
+            <Picker
+              selectedValue={clientId}
+              onValueChange={setClientId}
+              style={styles.picker}
+              dropdownIconColor="#fff"
+              accessible={true}
+              accessibilityLabel="Select client"
+            >
+              <Picker.Item label="Select Client" value="" />
+              {clients.map((client) => (
+                <Picker.Item
+                  key={client.id}
+                  label={client.name}
+                  value={client.id.toString()}
+                />
+              ))}
+            </Picker>
           </View>
 
-          {/* Invoice Number */}
-          <View style={styles.inputRow}>
-            <Ionicons name="document-text-outline" size={24} color="#3b82f6" style={styles.icon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Invoice Number"
-              placeholderTextColor="#94a3b8"
-              value={invoiceNumber}
-              editable={false}
-            />
-          </View>
+          <Text style={styles.label}>Invoice Number</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Invoice Number"
+            placeholderTextColor="#cbd5e1"
+            value={invoiceNumber}
+            onChangeText={setInvoiceNumber}
+            accessible={true}
+            accessibilityLabel="Invoice number"
+          />
 
-          {/* Dates */}
           <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.inputRow}>
-                <Ionicons name="calendar" size={24} color="#f59e0b" style={styles.icon} />
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowInvoiceDate(true)}
-                >
-                  <Text style={styles.dateText}>{formatDate(invoiceDate)}</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.dateContainer}>
+              <Text style={styles.label}>Invoice Date</Text>
+              <TouchableOpacity
+                style={styles.dateInput}
+                onPress={() => setShowInvoiceDate(true)}
+                accessible={true}
+                accessibilityLabel="Select invoice date"
+              >
+                <Ionicons name="calendar-outline" color="#7dd3fc" size={18} />
+                <Text style={styles.dateText}>
+                  {invoiceDate.toISOString().split("T")[0]}
+                </Text>
+              </TouchableOpacity>
               {showInvoiceDate && (
                 <DateTimePicker
                   value={invoiceDate}
                   mode="date"
                   display={Platform.OS === "ios" ? "inline" : "default"}
-                  onChange={(e, d) => {
-                    setShowInvoiceDate(Platform.OS === "ios");
-                    if (d) setInvoiceDate(d);
-                  }}
+                  onChange={handleDateChange(setInvoiceDate, setShowInvoiceDate)}
                 />
               )}
             </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={styles.inputRow}>
-                <Ionicons name="calendar" size={24} color="#ef4444" style={styles.icon} />
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowDueDate(true)}
-                >
-                  <Text style={styles.dateText}>{formatDate(dueDate)}</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={[styles.dateContainer, styles.dateContainerMargin]}>
+              <Text style={styles.label}>Due Date</Text>
+              <TouchableOpacity
+                style={styles.dateInput}
+                onPress={() => setShowDueDate(true)}
+                accessible={true}
+                accessibilityLabel="Select due date"
+              >
+                <Ionicons name="calendar-outline" color="#7dd3fc" size={18} />
+                <Text style={styles.dateText}>
+                  {dueDate.toISOString().split("T")[0]}
+                </Text>
+              </TouchableOpacity>
               {showDueDate && (
                 <DateTimePicker
                   value={dueDate}
                   mode="date"
                   display={Platform.OS === "ios" ? "inline" : "default"}
-                  onChange={(e, d) => {
-                    setShowDueDate(Platform.OS === "ios");
-                    if (d) setDueDate(d);
-                  }}
+                  onChange={handleDateChange(setDueDate, setShowDueDate)}
                 />
               )}
             </View>
           </View>
         </View>
 
-        {/* Invoice Items */}
-        <Text style={styles.sectionHeader}>Invoice Items</Text>
-        {items.length === 0 ? (
-          <Text style={styles.emptyText}>No items added. Add an item below.</Text>
-        ) : (
-          items.map((item, idx) => (
-            <Animated.View
-              key={idx}
-              style={[styles.itemCard, { opacity: itemFadeAnims[idx] || 1 }]}
-            >
-              <View style={styles.itemRow}>
-                <Ionicons name="cube-outline" size={24} color="#8b5cf6" style={styles.icon} />
-                <Text style={styles.itemText}>{item.description}</Text>
-                <TouchableOpacity onPress={() => handleRemoveItem(idx)} style={{ marginLeft: 12 }}>
-                  <Ionicons name="trash-outline" size={24} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.itemSubText}>
-                Qty: {item.quantity} | Price: ₹{item.unit_price} | Disc: ₹{item.discount} | Tax: {item.tax}%
-              </Text>
-            </Animated.View>
-          ))
-        )}
+        {/* INVOICE ITEMS */}
+        <Text style={[styles.sectionHeader, styles.sectionHeaderMargin]}>
+          Invoice Items
+        </Text>
+        {items.map((item, idx) => (
+          <Animated.View
+            key={idx}
+            style={[styles.itemCard, { opacity: itemFadeAnims[idx] || 1 }]}
+          >
+            <View style={styles.itemRow}>
+              <TextInput
+                style={[styles.input, styles.descriptionInput]}
+                placeholder="Description"
+                placeholderTextColor="#cbd5e1"
+                value={item.description}
+                onChangeText={(val) => handleChangeItem(idx, "description", val)}
+                accessible={true}
+                accessibilityLabel={`Item ${idx + 1} description`}
+              />
+              <TouchableOpacity
+                onPress={() => handleRemoveItem(idx)}
+                disabled={items.length === 1}
+                style={[styles.removeButton, { opacity: items.length === 1 ? 0.5 : 1 }]}
+                accessible={true}
+                accessibilityLabel={`Remove item ${idx + 1}`}
+              >
+                <Ionicons
+                  name="remove-circle-outline"
+                  color="#ef4444"
+                  size={26}
+                />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.itemRow}>
+              <TextInput
+                style={[styles.input, styles.quantityInput]}
+                placeholder="Qty"
+                placeholderTextColor="#cbd5e1"
+                keyboardType="numeric"
+                value={item.quantity}
+                onChangeText={(val) => handleChangeItem(idx, "quantity", val)}
+                accessible={true}
+                accessibilityLabel={`Item ${idx + 1} quantity`}
+              />
+              <TextInput
+                style={[styles.input, styles.unitPriceInput]}
+                placeholder="Unit Price"
+                placeholderTextColor="#cbd5e1"
+                keyboardType="numeric"
+                value={item.unit_price}
+                onChangeText={(val) => handleChangeItem(idx, "unit_price", val)}
+                accessible={true}
+                accessibilityLabel={`Item ${idx + 1} unit price`}
+              />
+              <TextInput
+                style={[styles.input, styles.discountInput]}
+                placeholder="Discount"
+                placeholderTextColor="#cbd5e1"
+                keyboardType="numeric"
+                value={item.discount}
+                onChangeText={(val) => handleChangeItem(idx, "discount", val)}
+                accessible={true}
+                accessibilityLabel={`Item ${idx + 1} discount`}
+              />
+              <TextInput
+                style={[styles.input, styles.taxInput]}
+                placeholder="Tax %"
+                placeholderTextColor="#cbd5e1"
+                keyboardType="numeric"
+                value={item.tax}
+                onChangeText={(val) => handleChangeItem(idx, "tax", val)}
+                accessible={true}
+                accessibilityLabel={`Item ${idx + 1} tax percent`}
+              />
+            </View>
+          </Animated.View>
+        ))}
 
-        {/* Add Item Form */}
-        <View style={styles.itemCard}>
-          <View style={styles.inputRow}>
-            <Ionicons name="cube-outline" size={24} color="#8b5cf6" style={styles.icon} />
-            <TextInput
-              style={[styles.input, { flex: 2 }]}
-              placeholder="Item Description"
-              placeholderTextColor="#94a3b8"
-              value={newItem.description}
-              onChangeText={(val) => handleChangeNewItem("description", val)}
-              autoCapitalize="sentences"
-            />
-          </View>
-          <View style={styles.row}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="Qty"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-              value={newItem.quantity}
-              onChangeText={(val) => handleChangeNewItem("quantity", val)}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1, marginLeft: 8 }]}
-              placeholder="Unit Price"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-              value={newItem.unit_price}
-              onChangeText={(val) => handleChangeNewItem("unit_price", val)}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1, marginLeft: 8 }]}
-              placeholder="Discount"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-              value={newItem.discount}
-              onChangeText={(val) => handleChangeNewItem("discount", val)}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1, marginLeft: 8 }]}
-              placeholder="Tax %"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-              value={newItem.tax}
-              onChangeText={(val) => handleChangeNewItem("tax", val)}
-            />
-          </View>
-          <TouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
-            <Ionicons name="add-circle" size={24} color="#10b981" style={styles.buttonIcon} />
-            <Text style={styles.addBtnText}>Add Item</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={handleAddItem}
+          accessible={true}
+          accessibilityLabel="Add new Item"
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={22}
+            color="#3b82f6"
+            style={styles.addIcon}
+          />
+          <Text style={styles.addBtnText}>Add Item</Text>
+        </TouchableOpacity>
 
-        {/* Totals */}
+        {/* TOTALS */}
         <View style={styles.totalsCard}>
           <Text style={styles.totalsText}>Subtotal: ₹ {totals.subtotal}</Text>
-          <Text style={styles.totalsText}>Discount: ₹ {totals.totalDiscount}</Text>
+          <Text style={styles.totalsText}>
+            Discount: ₹ {totals.totalDiscount}
+          </Text>
           <Text style={styles.totalsText}>Tax: ₹ {totals.totalTax}</Text>
-          <Text style={styles.totalsTextBig}>Grand Total: ₹ {totals.grandTotal}</Text>
+          <Text style={styles.totalsTextBig}>
+            Grand Total: ₹ {totals.grandTotal}
+          </Text>
         </View>
 
-        {/* Submit Button */}
-        <Animated.View style={{ opacity: fadeAnim }}>
-          <TouchableOpacity
-            style={styles.submitBtn}
-            onPress={handleSubmit}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={24}
-                  color="#fff"
-                  style={styles.buttonIcon}
-                />
-                <Text style={styles.submitBtnText}>Create Invoice</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
+        {/* SUBMIT BUTTON */}
+        <TouchableOpacity
+          style={[styles.submitBtn, { opacity: loading ? 0.7 : 1 }]}
+          onPress={handleSubmit}
+          disabled={loading}
+          accessible={true}
+          accessibilityLabel="Create invoice"
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.submitBtnText}>Create Invoice</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-  },
   scroll: {
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 40,
-    backgroundColor: "#0f172a",
+    padding: 18,
+    paddingBottom: 32,
+    backgroundColor: "#18181b",
+    minHeight: "100%",
+    marginTop:20,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   headerTitle: {
     fontSize: fontSizes.header,
-    fontWeight: "700",
-    color: "#f8fafc",
-    fontFamily: fonts.mono,
-  },
-  header: {
-    fontSize: fontSizes.header,
-    fontWeight: "700",
-    color: "#f8fafc",
-    fontFamily: fonts.mono,
-    marginBottom: 20,
+    fontWeight: "bold",
+    color: "#fff",
     textAlign: "center",
-    letterSpacing: 1,
+    flex: 1,
+  },
+  placeholder: {
+    width: 24,
   },
   card: {
-    backgroundColor: "#1e293b",
-    borderRadius: 12,
+    backgroundColor: "#23272f",
+    borderRadius: 14,
     padding: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2d3748",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 48,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-  },
-  icon: {
-    marginRight: 8,
+  label: {
+    color: "#9ca3af",
+    fontSize: 14,
+    marginTop: 8,
+    marginBottom: 2,
   },
   pickerWrap: {
-    flex: 1,
-    backgroundColor: "transparent",
+    backgroundColor: "#18181b",
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#334155",
+    overflow: "hidden",
+    height:60,
   },
   picker: {
-    color: "#f8fafc",
-    height: 48,
-    fontSize: 16,
-  },
-  pickerItem: {
-    color: "#000",
-    fontSize: 16,
-    backgroundColor: "#fff",
+    color: "#fff",
+    flex: 1,
+    height: 38,
   },
   input: {
-    flex: 1,
-    color: "#f8fafc",
-    fontSize: 16,
-    paddingVertical: 0,
+    backgroundColor: "#18181b",
+    color: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingHorizontal: 10,
+    height: 42,
+    fontSize: 15,
+    marginBottom: 6,
   },
   dateInput: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2d3748",
+    backgroundColor: "#18181b",
     borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 48,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "#334155",
+    paddingHorizontal: 10,
+    height: 42,
+    marginBottom: 6,
+    marginRight: 4,
   },
   dateText: {
-    color: "#f8fafc",
-    fontSize: 16,
+    color: "#fff",
+    marginLeft: 6,
+    fontSize: 15,
   },
   row: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  dateContainer: {
+    flex: 1,
+  },
+  dateContainerMargin: {
+    marginLeft: 8,
   },
   sectionHeader: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginVertical: 16,
+    fontSize: 18,
+    color: "#fff",
+    fontWeight: "bold",
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  sectionHeaderMargin: {
+    marginTop: 28,
   },
   itemCard: {
-    backgroundColor: "#1e293b",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: "#23272f",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    elevation: 1,
   },
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  itemText: {
+  descriptionInput: {
     flex: 2,
-    color: "#f8fafc",
-    fontSize: 16,
-    fontWeight: "500",
   },
-  itemSubText: {
-    color: "#94a3b8",
-    fontSize: 14,
+  quantityInput: {
+    flex: 1,
   },
-  emptyText: {
-    color: "#94a3b8",
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 16,
+  unitPriceInput: {
+    flex: 1,
+    marginLeft: 6,
+  },
+  discountInput: {
+    flex: 1,
+    marginLeft: 6,
+  },
+  taxInput: {
+    flex: 1,
+    marginLeft: 6,
+  },
+  removeButton: {
+    marginLeft: 8,
   },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "center",
-    backgroundColor: "#2d3748",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    alignSelf: "flex-start",
     marginVertical: 12,
+    backgroundColor: "#f1f5f9",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+  },
+  addIcon: {
+    marginRight: 4,
   },
   addBtnText: {
-    color: "#10b981",
+    color: "#3b82f6",
+    fontWeight: "bold",
     fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
   },
   totalsCard: {
-    backgroundColor: "#1e293b",
+    backgroundColor: "#23272f",
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    padding: 15,
+    marginTop: 10,
+    marginBottom: 12,
+    elevation: 1,
   },
   totalsText: {
-    color: "#d1d5db",
-    fontSize: 16,
-    marginBottom: 4,
+    color: "#e0e7ef",
+    fontSize: 15,
+    marginBottom: 2,
   },
   totalsTextBig: {
-    color: "#10b981",
-    fontSize: 18,
-    fontWeight: "700",
-    marginTop: 8,
+    color: "#38bdf8",
+    fontSize: 17,
+    fontWeight: "bold",
+    marginTop: 6,
   },
   submitBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     backgroundColor: "#3b82f6",
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginTop: 12,
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+    elevation: 2,
   },
   submitBtnText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  buttonIcon: {
-    marginRight: 8,
+    fontSize: 17,
+    fontWeight: "bold",
+    letterSpacing: 0.2,
   },
 });
