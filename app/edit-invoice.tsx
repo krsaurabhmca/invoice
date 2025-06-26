@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Animated,
 } from "react-native";
 
 export default function EditInvoiceScreen() {
@@ -36,6 +37,7 @@ export default function EditInvoiceScreen() {
     },
   ]);
   const [loading, setLoading] = useState(true);
+  const [itemFadeAnims, setItemFadeAnims] = useState<Animated.Value[]>([]);
   const { invoice_id } = useLocalSearchParams();
   const router = useRouter();
 
@@ -135,6 +137,21 @@ export default function EditInvoiceScreen() {
     setItems(items.filter((_, i) => i !== idx));
   };
 
+  // Refresh item animations whenever the items array changes
+  useEffect(() => {
+    setItemFadeAnims(items.map(() => new Animated.Value(0)));
+  }, [items]);
+
+  useEffect(() => {
+    itemFadeAnims.forEach((anim) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [itemFadeAnims]);
+
   const handleChangeItem = (idx, key, value) => {
     const newItems = [...items];
     newItems[idx][key] = value;
@@ -215,7 +232,7 @@ export default function EditInvoiceScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.header}>Create Invoice</Text>
+        <Text style={styles.header}>Edit Invoice</Text>
         {/* CLIENT & INVOICE DETAILS */}
         <View style={styles.card}>
           <Text style={styles.label}>Client</Text>
@@ -301,7 +318,10 @@ export default function EditInvoiceScreen() {
           Invoice Items
         </Text>
         {items.map((item, idx) => (
-          <View key={idx} style={styles.itemCard}>
+          <Animated.View
+            key={idx}
+            style={[styles.itemCard, { opacity: itemFadeAnims[idx] || 1 }]}
+          >
             <View style={styles.itemRow}>
               <TextInput
                 style={[styles.input, { flex: 2 }]}
@@ -358,7 +378,7 @@ export default function EditInvoiceScreen() {
                 onChangeText={(val) => handleChangeItem(idx, "tax_percent", val)}
               />
             </View>
-          </View>
+          </Animated.View>
         ))}
 
         <TouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
@@ -394,7 +414,7 @@ export default function EditInvoiceScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitBtnText}>Create Invoice</Text>
+            <Text style={styles.submitBtnText}>Update Invoice</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -533,3 +553,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
+
