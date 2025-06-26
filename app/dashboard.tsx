@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { fonts, fontSizes } from "./theme";
 
-const USER_STORAGE_KEY = "@invoiceApp:user";
+const USER_STORAGE_KEY = "user";
 
 interface User {
   id: string;
@@ -48,18 +48,38 @@ const actions = [
   { label: "Dues Report", icon: "alert-circle-outline", route: "/dues-report" },
 ];
 
+// Custom timeout function for fetch
+const fetchWithTimeout = async (url: string, options = {}, timeout = 10000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  }
+};
+
 export default function DashboardScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
+  const [fadeAnims, setFadeAnims] = useState<Animated.Value[]>([]);
+  const [actionAnims, setActionAnims] = useState<Animated.Value[]>([]);
   const router = useRouter();
 
   // Fetch user and dashboard data
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const userJson = await AsyncStorage.getItem('user');
+      const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY);
       if (!userJson) {
         throw new Error("Session expired. Please log in again.");
       }
@@ -69,39 +89,95 @@ export default function DashboardScreen() {
       }
       setUser(userData);
 
-      const resp = await fetch(
-        `https://offerplant.com/invoice/get_dashboard.php?user_id=${userData.id}`
+      const response = await fetchWithTimeout(
+        `https://offerplant.com/invoice/get_dashboard.php?user_id=${userData.id}`,
+        {},
+        10000
       );
-      if (!resp.ok) {
-        const errorData = await resp.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP Error: ${resp.status}`);
+      const responseText = await response.text();
+      console.log("API Response Status:", response.status);
+      console.log("API Response Text:", responseText);
+
+      if (!responseText) {
+        throw new Error("Empty response from server");
       }
-      const data = await resp.json();
-      if (data.status !== "success") {
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("JSON Parse Error:", jsonError);
+        throw new Error("Invalid response format from server");
+      }
+
+      if (response.ok && data.status === "success") {
+        setDashboard({
+          total_invoices: parseInt(data.total_invoices) || 0,
+          paid_invoices: parseInt(data.paid_invoices) || 0,
+          unpaid_invoices: parseInt(data.unpaid_invoices) || 0,
+          unpaid_amount: data.unpaid_amount || "0.00",
+        });
+        setFadeAnims([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]);
+        setActionAnims(actions.map(() => new Animated.Value(0)));
+      } else {
         throw new Error(data.message || "Failed to fetch dashboard data.");
       }
-      setDashboard({
-        total_invoices: parseInt(data.total_invoices) || 0,
-        paid_invoices: parseInt(data.paid_invoices) || 0,
-        unpaid_invoices: parseInt(data.unpaid_invoices) || 0,
-        unpaid_amount: data.unpaid_amount || "0.00",
-      });
     } catch (e: any) {
       console.error("Dashboard error:", e);
-      Alert.alert("Error", e.message, [
-        { text: "OK", onPress: () => router.replace("/login") },
+      Alert.alert("Error", e.message || "Could not load dashboard data.", [
+        { text: "Cancel" },
+        { text: "Retry", onPress: fetchData },
+        { text: "Login", onPress: () => router.replace("/login") },
       ]);
       setDashboard(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Staggered animations for stats and actions
+  useEffect(() => {
+    fadeAnims.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 100,
+        useNativeDriver: true,
+      }).start();
+    });
+    actionAnims.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 50,
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => {
+      fadeAnims.forEach((anim) => anim.setValue(0));
+      actionAnims.forEach((anim) => anim.setValue(0));
+    };
+  }, [fadeAnims, actionAnims]);
+
+  // Button press animation
+  const handlePressIn = useCallback((anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const handlePressOut = useCallback((anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   // Pull-to-refresh
   const onRefresh = useCallback(() => {
@@ -110,9 +186,11 @@ export default function DashboardScreen() {
   }, [fetchData]);
 
   // Logout
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
+    const logoutAnim = new Animated.Value(1);
+    handlePressIn(logoutAnim);
     Alert.alert("Logout", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
+      { text: "Cancel", style: "cancel", onPress: () => handlePressOut(logoutAnim) },
       {
         text: "Logout",
         style: "destructive",
@@ -122,19 +200,20 @@ export default function DashboardScreen() {
         },
       },
     ]);
-  };
+    return logoutAnim;
+  }, [handlePressIn, handlePressOut, router]);
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loader}>
+      <LinearGradient colors={["#18181b", "#23272f"]} style={styles.loader}>
         <ActivityIndicator size="large" color="#38bdf8" />
         <Text style={styles.loaderText}>Loading Dashboard...</Text>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <LinearGradient colors={["#18181b", "#23272f"]} style={styles.container}>
+    <LinearGradient colors={["#18181b", "#1e2229"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -143,113 +222,137 @@ export default function DashboardScreen() {
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor="#38bdf8"
+              colors={["#38bdf8"]}
+              progressBackgroundColor="#23272f"
             />
           }
         >
           {/* Header */}
-          <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => router.back()}
+              accessible={true}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
+            </TouchableOpacity>
             <Text style={styles.headerTitle}>
               Welcome, {user?.name || "User"}!
             </Text>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={() => {
+                const anim = handleLogout();
+                return anim;
+              }}
+              accessible={true}
+              accessibilityLabel="Log out"
+              accessibilityRole="button"
+            >
+              {/* <Animated.View style={{ transform: [{ scale: handleLogout() }] }}> */}
+                <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+              {/* </Animated.View> */}
             </TouchableOpacity>
-          </Animated.View>
+          </View>
 
           {/* Stats */}
-          {dashboard && (
-            <Animated.View style={[styles.statsContainer, { opacity: fadeAnim }]}>
-              <LinearGradient
-                colors={["#23272f", "#2a2e36"]}
-                style={styles.statCard}
+          {dashboard ? (
+            <View style={styles.statsContainer}>
+              {[
+                { icon: statIcons.total, value: dashboard.total_invoices, label: "Total Invoices" },
+                { icon: statIcons.paid, value: dashboard.paid_invoices, label: "Paid Invoices", color: "#22c55e" },
+                { icon: statIcons.unpaid, value: dashboard.unpaid_invoices, label: "Unpaid Invoices", color: "#ef4444" },
+                { icon: statIcons.amount, value: `₹${dashboard.unpaid_amount}`, label: "Unpaid Amount", color: "#ef4444" },
+              ].map((stat, index) => (
+                <Animated.View
+                  key={stat.label}
+                  style={[styles.statCard, { opacity: fadeAnims[index] || 1 }]}
+                >
+                  <LinearGradient
+                    colors={["#23272f", "#2a2e36"]}
+                    style={styles.statCardInner}
+                  >
+                    <Ionicons
+                      name={stat.icon}
+                      size={32}
+                      color={stat.color || "#38bdf8"}
+                      style={styles.statIcon}
+                    />
+                    <Text style={styles.statValue}>{stat.value}</Text>
+                    <Text style={styles.statLabel}>{stat.label}</Text>
+                  </LinearGradient>
+                </Animated.View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="alert-circle-outline" size={48} color="#9ca3af" />
+              <Text style={styles.emptyText}>No data available</Text>
+              <Text style={styles.emptySubText}>Try refreshing or logging in again</Text>
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={fetchData}
+                accessible={true}
+                accessibilityLabel="Retry loading data"
+                accessibilityRole="button"
               >
-                <Ionicons
-                  name={statIcons.total}
-                  size={28}
-                  color="#38bdf8"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statValue}>{dashboard.total_invoices}</Text>
-                <Text style={styles.statLabel}>Total Invoices</Text>
-              </LinearGradient>
-              <LinearGradient
-                colors={["#23272f", "#2a2e36"]}
-                style={styles.statCard}
-              >
-                <Ionicons
-                  name={statIcons.paid}
-                  size={28}
-                  color="#22c55e"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statValue}>{dashboard.paid_invoices}</Text>
-                <Text style={styles.statLabel}>Paid Invoices</Text>
-              </LinearGradient>
-              <LinearGradient
-                colors={["#23272f", "#2a2e36"]}
-                style={styles.statCard}
-              >
-                <Ionicons
-                  name={statIcons.unpaid}
-                  size={28}
-                  color="#ef4444"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statValue}>{dashboard.unpaid_invoices}</Text>
-                <Text style={styles.statLabel}>Unpaid Invoices</Text>
-              </LinearGradient>
-              <LinearGradient
-                colors={["#23272f", "#2a2e36"]}
-                style={styles.statCard}
-              >
-                <Ionicons
-                  name={statIcons.amount}
-                  size={28}
-                  color="#ef4444"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statValue}>₹{dashboard.unpaid_amount}</Text>
-                <Text style={styles.statLabel}>Unpaid Amount</Text>
-          </LinearGradient>
-        </Animated.View>
-      )}
+                <Text style={styles.emptyBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-      {dashboard && (
-        <View style={styles.progressWrapper}>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${
-                    (dashboard.paid_invoices /
-                      Math.max(dashboard.total_invoices, 1)) *
-                    100
-                  }%`,
-                },
-              ]}
-            />
-          </View>
-          <Text style={styles.progressText}>
-            {dashboard.paid_invoices}/{dashboard.total_invoices} invoices paid
-          </Text>
-        </View>
-      )}
+          {/* Progress Bar */}
+          {dashboard && (
+            <View style={styles.progressWrapper}>
+              <LinearGradient
+                colors={["#2a2e36", "#2a2e36"]}
+                style={styles.progressTrack}
+              >
+                <LinearGradient
+                  colors={["#22c55e", "#38bdf8"]}
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${
+                        (dashboard.paid_invoices /
+                          Math.max(dashboard.total_invoices, 1)) *
+                        100
+                      }%`,
+                    },
+                  ]}
+                />
+              </LinearGradient>
+              <Text style={styles.progressText}>
+                {dashboard.paid_invoices}/{dashboard.total_invoices} invoices paid
+              </Text>
+            </View>
+          )}
 
           {/* Actions */}
-          <Animated.View style={[styles.actionsContainer, { opacity: fadeAnim }]}>
-            {actions.map((action) => (
-              <TouchableOpacity
-                key={action.label}
-                style={styles.actionButton}
-                onPress={() => router.push(action.route)}
-                accessibilityLabel={action.label}
-              >
-                <Ionicons name={action.icon} size={24} color="#fff" />
-                <Text style={styles.actionLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </Animated.View>
+          <View style={styles.actionsContainer}>
+            {actions.map((action, index) => {
+              const scaleAnim = actionAnims[index] || new Animated.Value(1);
+              return (
+                <TouchableOpacity
+                  key={action.label}
+                  style={styles.actionButton}
+                  onPressIn={() => handlePressIn(scaleAnim)}
+                  onPressOut={() => handlePressOut(scaleAnim)}
+                  onPress={() => router.push(action.route)}
+                  accessible={true}
+                  accessibilityLabel={action.label}
+                  accessibilityRole="button"
+                >
+                  <Animated.View style={[styles.actionButtonInner, { opacity: actionAnims[index] || 1, transform: [{ scale: scaleAnim }] }]}>
+                    <Ionicons name={action.icon} size={24} color="#fff" />
+                    <Text style={styles.actionLabel}>{action.label}</Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -265,31 +368,39 @@ const styles = StyleSheet.create({
   },
   scroll: {
     padding: 16,
-    paddingTop: 40,
+    paddingTop: 20,
     paddingBottom: 80,
   },
   loader: {
     flex: 1,
-    backgroundColor: "#18181b",
     alignItems: "center",
     justifyContent: "center",
   },
   loaderText: {
-    color: "#9ca3af",
+    color: "#e0e7ef",
     fontSize: 16,
-    marginTop: 8,
+    marginTop: 12,
+    fontWeight: "500",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155",
+  },
+  backBtn: {
+    padding: 8,
   },
   headerTitle: {
-    fontSize: fontSizes.header,
+    fontSize: fontSizes.header || 24,
     fontWeight: "700",
     color: "#facc15",
     fontFamily: fonts.mono,
+    textAlign: "center",
+    flex: 1,
   },
   logoutButton: {
     padding: 8,
@@ -302,47 +413,77 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: "48%",
+    marginBottom: 12,
+  },
+  statCardInner: {
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    borderColor: "#334155",
     elevation: 3,
   },
   statIcon: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "#fff",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   statLabel: {
     fontSize: 14,
     color: "#9ca3af",
+    fontWeight: "500",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    marginTop: 60,
+    padding: 20,
+  },
+  emptyText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 12,
+  },
+  emptySubText: {
+    color: "#9ca3af",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  emptyBtn: {
+    marginTop: 16,
+    backgroundColor: "#3b82f6",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    elevation: 2,
+  },
+  emptyBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   progressWrapper: {
     marginBottom: 24,
   },
   progressTrack: {
-    height: 8,
-    backgroundColor: "#2a2e36",
-    borderRadius: 4,
+    height: 10,
+    borderRadius: 5,
     overflow: "hidden",
   },
   progressFill: {
-    height: 8,
-    backgroundColor: "#22c55e",
+    height: 10,
+    borderRadius: 5,
   },
   progressText: {
-    marginTop: 8,
-    color: "#9ca3af",
+    marginTop: 10,
+    color: "#e0e7ef",
     fontSize: 14,
+    fontWeight: "500",
     textAlign: "center",
   },
   actionsContainer: {
@@ -352,15 +493,17 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     width: "100%",
-    backgroundColor: "#38bdf8",
     borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
+  },
+  actionButtonInner: {
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    backgroundColor: "#3b82f6",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
     elevation: 3,
   },
   actionLabel: {

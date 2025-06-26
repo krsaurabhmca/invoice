@@ -3,16 +3,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    FlatList,
-    RefreshControl,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  FlatList,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { fontSizes } from "./theme";
 
@@ -113,7 +113,7 @@ export default function PaymentPageScreen() {
           activeOpacity={0.8}
         >
           <Ionicons name="document-text-outline" size={18} color="#fff" />
-          <Text style={styles.actionText}>View Invoice</Text>
+          <Text style={styles.actionText}> Invoice</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -132,15 +132,15 @@ export default function PaymentPageScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.headerArea}>
-        <Text style={styles.header}>Payment History</Text>
+        
         <TouchableOpacity
           style={styles.createBtn}
-          onPress={() => router.push("/add-payment")}
+          onPress={() => router.push("/dashboard")}
           activeOpacity={0.8}
         >
-          <Ionicons name="add-circle" size={24} color="#fff" />
-          <Text style={styles.createBtnText}>Add Payment</Text>
-        </TouchableOpacity>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+         </TouchableOpacity>
+        <Text style={styles.header}>Payment History</Text>
       </View>
 
       {/* Payment List */}
