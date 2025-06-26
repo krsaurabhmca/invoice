@@ -2,11 +2,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useFonts } from "expo-font";
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
+  const [fontsLoaded] = useFonts({
+    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+  });
 
   // Check login status on mount
   useEffect(() => {
@@ -32,8 +37,8 @@ export default function RootLayout() {
     }
   }, [isLoading, isLoggedIn]);
 
-  // Show loading screen while checking
-  if (isLoading) {
+  // Show loading screen while checking or while fonts load
+  if (isLoading || !fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#38bdf8" />
@@ -42,14 +47,16 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
       <Stack.Screen name="dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="manage-invoices" options={{ headerShown: false }} />
       <Stack.Screen name="create-invoice" options={{ headerShown: false }} />
       <Stack.Screen name="dues-report" options={{ headerShown: false }} />
-    </Stack>
+      </Stack>
+    </SafeAreaProvider>
   );
 }
 

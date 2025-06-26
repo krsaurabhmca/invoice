@@ -16,6 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { fonts } from "./theme";
 
 // Utility function for date formatting (YYYY-MM-DD)
 const formatDate = (date) => {
@@ -202,10 +204,11 @@ export default function CreateInvoiceScreen() {
   const totals = getTotals();
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Header */}
         <Text style={styles.header}>Create New Invoice</Text>
@@ -401,12 +404,17 @@ export default function CreateInvoiceScreen() {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: "#0f172a",
+  },
+  safeArea: {
     flex: 1,
     backgroundColor: "#0f172a",
   },
@@ -420,6 +428,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "700",
     color: "#f8fafc",
+    fontFamily: fonts.mono,
     marginBottom: 20,
     textAlign: "center",
     letterSpacing: 1,

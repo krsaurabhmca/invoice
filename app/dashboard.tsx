@@ -8,13 +8,14 @@ import {
   Alert,
   Animated,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { fonts } from "./theme";
 
 const USER_STORAGE_KEY = "@invoiceApp:user";
 
@@ -209,9 +210,31 @@ export default function DashboardScreen() {
                 />
                 <Text style={styles.statValue}>₹{dashboard.unpaid_amount}</Text>
                 <Text style={styles.statLabel}>Unpaid Amount</Text>
-              </LinearGradient>
-            </Animated.View>
-          )}
+          </LinearGradient>
+        </Animated.View>
+      )}
+
+      {dashboard && (
+        <View style={styles.progressWrapper}>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${
+                    (dashboard.paid_invoices /
+                      Math.max(dashboard.total_invoices, 1)) *
+                    100
+                  }%`,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {dashboard.paid_invoices}/{dashboard.total_invoices} invoices paid
+          </Text>
+        </View>
+      )}
 
           {/* Actions */}
           <Animated.View style={[styles.actionsContainer, { opacity: fadeAnim }]}>
@@ -266,6 +289,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "700",
     color: "#facc15",
+    fontFamily: fonts.mono,
   },
   logoutButton: {
     padding: 8,
@@ -301,6 +325,25 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 14,
     color: "#9ca3af",
+  },
+  progressWrapper: {
+    marginBottom: 24,
+  },
+  progressTrack: {
+    height: 8,
+    backgroundColor: "#2a2e36",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 8,
+    backgroundColor: "#22c55e",
+  },
+  progressText: {
+    marginTop: 8,
+    color: "#9ca3af",
+    fontSize: 14,
+    textAlign: "center",
   },
   actionsContainer: {
     flexDirection: "row",

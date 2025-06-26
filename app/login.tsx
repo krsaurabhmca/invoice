@@ -16,6 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { fonts } from "./theme";
 
 const { width } = Dimensions.get("window");
 
@@ -77,11 +79,12 @@ export default function LoginScreen() {
 
   return (
     <LinearGradient colors={["#18181b", "#23272f"]} style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-      >
-        <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: cardAnim }] }]}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardView}
+        >
+          <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: cardAnim }] }]}>
           {/* Branding */}
           <View style={styles.brandContainer}>
             <Ionicons name="leaf-outline" size={40} color="#38bdf8" />
@@ -150,7 +153,8 @@ export default function LoginScreen() {
             </Link>
           </View>
         </Animated.View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -160,6 +164,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  safeArea: {
+    flex: 1,
   },
   keyboardView: {
     flex: 1,
@@ -189,6 +196,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: "#facc15",
+    fontFamily: fonts.mono,
     marginTop: 8,
   },
   tagline: {
@@ -240,6 +248,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "600",
+    fontFamily: fonts.mono,
   },
   footer: {
     flexDirection: "row",
