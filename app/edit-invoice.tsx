@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
@@ -294,7 +295,7 @@ export default function EditInvoiceScreen() {
         Alert.alert("Error", msg);
       }
     } catch (e) {
-      Alert.alert("Error", e.message || "Could not connect to server.");
+      Alert.alert("Error", networkErrorMessage(e));
     } finally {
       setLoading(false);
     }

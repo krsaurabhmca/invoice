@@ -1,15 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     Animated,
     FlatList,
+    TextInput,
     SafeAreaView,
     StyleSheet,
     Text,
@@ -21,10 +24,25 @@ import { fontSizes } from "./theme";
 export default function DuesReportScreen() {
   const [user, setUser] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [expandedPayments, setExpandedPayments] = useState({});
   const router = useRouter();
+
+  const filteredInvoices = invoices.filter((inv) => {
+    if (!search) return true;
+    const term = search.toLowerCase();
+    return (
+      inv.client_name?.toLowerCase().includes(term) ||
+      inv.client_phone?.includes(term) ||
+      inv.phone?.includes(term)
+    );
+  });
+  const totalDue = filteredInvoices.reduce(
+    (sum, inv) => sum + parseFloat(inv.due || 0),
+    0
+  );
 
   // Load user and dues report
   const fetchDuesReport = async () => {
@@ -42,7 +60,7 @@ export default function DuesReportScreen() {
         throw new Error("Invalid response from dues report");
       }
     } catch (e) {
-      Alert.alert("Error", e.message || "Could not load dues report.");
+      Alert.alert("Error", networkErrorMessage(e));
     } finally {
       setLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
@@ -82,7 +100,7 @@ export default function DuesReportScreen() {
       Alert.alert("Success", `Invoice downloaded to ${pdfUri}`);
       return pdfUri;
     } catch (e) {
-      Alert.alert("Error", e.message || "Could not download invoice.");
+      Alert.alert("Error", networkErrorMessage(e));
     }
   };
 
@@ -100,7 +118,7 @@ export default function DuesReportScreen() {
 
       await WebBrowser.openBrowserAsync(pdfUri);
     } catch (e) {
-      Alert.alert("Error", e.message || "Could not view invoice.");
+      Alert.alert("Error", networkErrorMessage(e));
     }
   };
 
@@ -122,8 +140,18 @@ export default function DuesReportScreen() {
         UTI: "com.adobe.pdf",
       });
     } catch (e) {
-      Alert.alert("Error", e.message || "Could not share invoice.");
+      Alert.alert("Error", networkErrorMessage(e));
     }
+  };
+
+  const shareDues = (invoice) => {
+    const pdfLink = `https://offerplant.com/invoice/generate_invoice_pdf.php?invoice_id=${invoice.invoice_id}&user_id=${user.id}`;
+    const message = `Invoice ${invoice.invoice_number} due \u20B9${Number(invoice.due).toFixed(2)}\n${pdfLink}`;
+    let url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    if (invoice.client_phone) {
+      url += `&phone=91${invoice.client_phone}`;
+    }
+    Linking.openURL(url);
   };
 
   // Cancel invoice
@@ -154,7 +182,7 @@ export default function DuesReportScreen() {
                 throw new Error(data.message || "Failed to cancel invoice");
               }
             } catch (e) {
-              Alert.alert("Error", e.message || "Could not cancel invoice.");
+              Alert.alert("Error", networkErrorMessage(e));
             }
           },
         },
@@ -217,6 +245,9 @@ export default function DuesReportScreen() {
         <TouchableOpacity style={styles.actionBtn} onPress={() => shareInvoice(item.invoice_id)}>
           <Ionicons name="share-outline" size={20} color="#f59e0b" />
         </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => shareDues(item)}>
+          <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionBtn}
           onPress={() => cancelInvoice(item.invoice_id, item.invoice_number)}
@@ -251,14 +282,27 @@ export default function DuesReportScreen() {
         <Text style={styles.headerTitle}>Dues Report</Text>
       </Animated.View>
 
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={20} color="#9ca3af" style={{marginRight:8}} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search name or mobile"
+          placeholderTextColor="#9ca3af"
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
       {/* Invoice List */}
       <FlatList
-        data={invoices}
+        data={filteredInvoices}
         renderItem={renderInvoice}
         keyExtractor={(item) => item.invoice_id.toString()}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<Text style={styles.emptyText}>No dues found.</Text>}
       />
+
+      <Text style={styles.totalText}>Total Due: ₹{totalDue.toFixed(2)}</Text>
 
       {/* Create Invoice Button */}
       <TouchableOpacity
@@ -400,5 +444,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     marginTop: 20,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#23272f",
+    margin: 16,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#fff",
+  },
+  totalText: {
+    color: "#38bdf8",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "right",
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
 });

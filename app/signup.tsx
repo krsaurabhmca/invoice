@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -84,7 +85,7 @@ export default function SignupScreen() {
       }
     } catch (error) {
       console.error("Signup error:", error);
-      Alert.alert("Error", "Network error. Please check your connection.");
+      Alert.alert("Error", networkErrorMessage(error));
     } finally {
       setLoading(false);
     }

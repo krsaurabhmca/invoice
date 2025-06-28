@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -41,8 +42,8 @@ export default function EditClientScreen() {
   const validatePhone = (val) => /^\d{10}$/.test(val);
 
   const handleUpdateClient = async () => {
-    if (!name || !email || !phone || !address || !gst) {
-      Alert.alert("Error", "Please fill in all fields.");
+    if (!name || !email || !phone || !address) {
+      Alert.alert("Error", "Please fill in all required fields.");
       return;
     }
     if (!validateEmail(email)) {
@@ -51,6 +52,10 @@ export default function EditClientScreen() {
     }
     if (!validatePhone(phone)) {
       Alert.alert("Error", "Please enter a 10-digit phone number.");
+      return;
+    }
+    if (gst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gst)) {
+      Alert.alert("Error", "Enter a valid GST number.");
       return;
     }
 
@@ -66,7 +71,7 @@ export default function EditClientScreen() {
           email,
           phone,
           address,
-          gst,
+          gst: gst || "",
         }),
       });
       const data = await response.json();
@@ -83,7 +88,7 @@ export default function EditClientScreen() {
         Alert.alert("Error", errorMessage);
       }
     } catch (error) {
-      Alert.alert("Error", "Network or server error. Try again.");
+      Alert.alert("Error", networkErrorMessage(error));
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -61,8 +62,12 @@ export default function AddClientScreen() {
     if (!email || !/\S+@\S+\.\S+/.test(email)) newErrors.email = "Valid email is required";
     if (!phone || !/^\d{10}$/.test(phone)) newErrors.phone = "10-digit phone number is required";
     if (!address) newErrors.address = "Address is required";
-    if (!gst || !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gst))
-      newErrors.gst = "Valid GST number is required (e.g., 22AAAAA0000A1Z5)";
+    if (
+      gst &&
+      !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gst)
+    ) {
+      newErrors.gst = "Enter a valid GST number";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -99,7 +104,7 @@ export default function AddClientScreen() {
         Alert.alert("Error", data.message || "Failed to add client.");
       }
     } catch (error) {
-      Alert.alert("Error", "Network error. Please check your connection.");
+      Alert.alert("Error", networkErrorMessage(error));
     } finally {
       setLoading(false);
     }

@@ -127,8 +127,9 @@ export default function ManageClientsScreen() {
   };
 
   const handleView = (client) => {
+    // There is no dedicated client detail screen. Navigate to edit instead
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: "/client-detail", params: { client: JSON.stringify(client) } });
+    router.push({ pathname: "/edit-client", params: { client: JSON.stringify(client) } });
   };
 
   const renderClient = ({ item, index }) => (
@@ -150,12 +151,11 @@ export default function ManageClientsScreen() {
           <Text style={styles.infoText}>
             Phone: <Text style={styles.infoValue}>{item.phone}</Text>
           </Text>
-          <Text style={styles.infoText}>
-            Address: <Text style={styles.infoValue}>{item.address || "N/A"}</Text>
-          </Text>
-          <Text style={styles.infoText}>
-            GST: <Text style={styles.infoValue}>{item.gst_number || "N/A"}</Text>
-          </Text>
+          {item.due && (
+            <Text style={styles.infoText}>
+              Due: <Text style={styles.infoValue}>{item.due}</Text>
+            </Text>
+          )}
           <Text style={styles.created}>Added: {item.created_at}</Text>
         </View>
         <View style={styles.actions}>

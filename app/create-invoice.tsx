@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
@@ -296,7 +297,7 @@ export default function CreateInvoiceScreen() {
       }
     } catch (e) {
       console.error("Submit Error:", e);
-      Alert.alert("Error", e.message || "Could not connect to server.", [
+      Alert.alert("Error", networkErrorMessage(e), [
         { text: "Cancel" },
         { text: "Retry", onPress: handleSubmit },
       ]);

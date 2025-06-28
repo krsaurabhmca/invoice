@@ -229,15 +229,6 @@ export default function DashboardScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => router.back()}
-              accessible={true}
-              accessibilityLabel="Go back"
-              accessibilityRole="button"
-            >
-              <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
-            </TouchableOpacity>
             <Text style={styles.headerTitle}>
               Welcome, {user?.name || "User"}!
             </Text>
@@ -390,9 +381,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#334155",
-  },
-  backBtn: {
-    padding: 8,
   },
   headerTitle: {
     fontSize: fontSizes.header || 24,

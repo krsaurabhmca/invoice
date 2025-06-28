@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -210,7 +211,7 @@ export default function UpdateProfileScreen() {
               company_name: profile.company_name,
               gst_number: profile.gst_number,
               bank_details: profile.bank_details,
-              logo: logoPath,
+              logo: logoPath || "",
             };
 
             const response = await fetch("https://offerplant.com/invoice/update_profile.php", {
@@ -239,7 +240,7 @@ export default function UpdateProfileScreen() {
               Alert.alert("Error", data.message || "Failed to update profile.");
             }
           } catch (e: any) {
-            Alert.alert("Error", e.message || "Could not update profile.");
+            Alert.alert("Error", networkErrorMessage(e));
           } finally {
             setSubmitting(false);
           }

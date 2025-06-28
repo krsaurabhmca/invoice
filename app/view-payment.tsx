@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -11,6 +12,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -30,6 +32,8 @@ const formatDate = (dateString) => {
 export default function PaymentPageScreen() {
   const [userId, setUserId] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [modeFilter, setModeFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fadeAnims, setFadeAnims] = useState<Animated.Value[]>([]);
@@ -73,7 +77,7 @@ export default function PaymentPageScreen() {
         throw new Error("Invalid response format");
       }
     } catch (e) {
-      Alert.alert("Error", "Could not load payments. Please try again.");
+      Alert.alert("Error", networkErrorMessage(e));
       setPayments([]);
     } finally {
       setLoading(false);
@@ -119,6 +123,14 @@ export default function PaymentPageScreen() {
     </Animated.View>
   );
 
+  const filteredPayments = payments.filter((p) => {
+    const matchesMode = modeFilter
+      ? p.mode.toLowerCase().includes(modeFilter.toLowerCase())
+      : true;
+    const matchesDate = dateFilter ? formatDate(p.payment_date) === dateFilter : true;
+    return matchesMode && matchesDate;
+  });
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loader}>
@@ -143,9 +155,27 @@ export default function PaymentPageScreen() {
         <Text style={styles.header}>Payment History</Text>
       </View>
 
+      {/* Filters */}
+      <View style={{flexDirection:'row',paddingHorizontal:20,marginBottom:10}}>
+        <TextInput
+          style={[styles.input,{flex:1,marginRight:8}]}
+          placeholder="Filter mode"
+          placeholderTextColor="#9ca3af"
+          value={modeFilter}
+          onChangeText={setModeFilter}
+        />
+        <TextInput
+          style={[styles.input,{flex:1}]}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#9ca3af"
+          value={dateFilter}
+          onChangeText={setDateFilter}
+        />
+      </View>
+
       {/* Payment List */}
       <FlatList
-        data={payments}
+        data={filteredPayments}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderPayment}
         contentContainerStyle={styles.list}
@@ -167,6 +197,9 @@ export default function PaymentPageScreen() {
           </View>
         }
       />
+      <Text style={styles.totalText}>
+        Total: {formatCurrency(filteredPayments.reduce((sum,p) => sum + parseFloat(p.amount || 0), 0))}
+      </Text>
     </SafeAreaView>
   );
 }
@@ -294,5 +327,22 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     fontSize: 14,
     marginTop: 6,
+  },
+  input: {
+    backgroundColor: "#23272f",
+    color: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#334155",
+    height: 40,
+  },
+  totalText: {
+    color: "#38bdf8",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "right",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
 });

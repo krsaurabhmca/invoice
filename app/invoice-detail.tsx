@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import * as Linking from "expo-linking";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -81,6 +82,16 @@ export default function InvoiceDetailScreen() {
     return (subtotal - discount + tax).toFixed(2);
   };
 
+  const shareWhatsApp = () => {
+    if (!invoice) return;
+    const pdfLink = `https://offerplant.com/invoice/generate_invoice_pdf.php?invoice_id=${invoice.id}&user_id=${invoice.user_id}`;
+    const due =
+      (parseFloat(invoice.total_amount) || 0) -
+      (parseFloat(invoice.total_paid) || 0);
+    const message = `Invoice ${invoice.invoice_number}\nTotal: ₹${invoice.total_amount}\nPaid: ₹${invoice.total_paid}\nDue: ₹${due.toFixed(2)}\n${pdfLink}`;
+    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(message)}`);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loader}>
@@ -104,18 +115,26 @@ export default function InvoiceDetailScreen() {
         {/* Header */}
         <View style={styles.headerArea}>
           <Text style={styles.header}> #{invoice.invoice_number}</Text>
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() =>
-              router.push({
-                pathname: "/edit-invoice",
-                params: { invoice_id: invoice.id },
-              })
-            }
-          >
-            <Ionicons name="create-outline" size={24} color="#fff" />
-            <Text style={styles.editBtnText}>Edit</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row" }}>
+            <TouchableOpacity
+              style={[styles.editBtn, { marginRight: 8 }]}
+              onPress={() => shareWhatsApp()}
+            >
+              <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() =>
+                router.push({
+                  pathname: "/edit-invoice",
+                  params: { invoice_id: invoice.id },
+                })
+              }
+            >
+              <Ionicons name="create-outline" size={24} color="#fff" />
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Invoice Info */}
@@ -243,6 +262,19 @@ export default function InvoiceDetailScreen() {
             <Text style={styles.label}>Grand Total:</Text>
             <Text style={[styles.value, styles.grandTotal]}>
               {formatCurrency(invoice.total_amount)}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Paid:</Text>
+            <Text style={styles.value}>{formatCurrency(invoice.total_paid)}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Due:</Text>
+            <Text style={[styles.value, { color: "#ef4444" }]}>
+              {formatCurrency(
+                (parseFloat(invoice.total_amount) || 0) -
+                  (parseFloat(invoice.total_paid) || 0)
+              )}
             </Text>
           </View>
         </Animated.View>

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, router } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -70,7 +71,7 @@ export default function ManageInvoicesScreen() {
         throw new Error("Invalid response format");
       }
     } catch (e) {
-      Alert.alert("Error", "Could not load invoices. Please try again.");
+      Alert.alert("Error", networkErrorMessage(e));
       setInvoices([]);
     } finally {
       setLoading(false);

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -59,7 +60,7 @@ export default function AddPaymentScreen() {
         Alert.alert("Error", msg);
       }
     } catch (e) {
-      Alert.alert("Error", "Could not connect to server.");
+      Alert.alert("Error", networkErrorMessage(e));
     } finally {
       setLoading(false);
     }

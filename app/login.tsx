@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
@@ -82,7 +83,7 @@ export default function LoginScreen() {
       }
     } catch (error) {
       console.error("Login error:", error);
-      Alert.alert("Error", "Network error. Please check your connection.");
+      Alert.alert("Error", networkErrorMessage(error));
     } finally {
       setLoading(false);
     }
