@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
@@ -19,6 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { fonts } from "./theme";
+import { networkErrorMessage } from "./utils";
 
 const { width } = Dimensions.get("window");
 
@@ -76,7 +76,7 @@ export default function LoginScreen() {
 
       if (response.ok && data.status === "success" && data.user) {
         await AsyncStorage.setItem("user", JSON.stringify(data.user));
-        Alert.alert("Welcome", `Hello, ${data.user.name}!`);
+       // Alert.alert("Welcome", `Hello, ${data.user.name}!`);
         router.replace("/dashboard"); // Use replace to prevent back navigation
       } else {
         Alert.alert("Error", data.message || "Login failed. Please try again.");

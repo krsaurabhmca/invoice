@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Animated,
   FlatList,
+  Platform,
   RefreshControl,
   SafeAreaView,
   StyleSheet,
@@ -17,8 +18,8 @@ import {
   View,
 } from "react-native";
 import { fontSizes } from "./theme";
+import { networkErrorMessage } from "./utils";
 
-// Utility function to format currency
 const formatCurrency = (value) => {
   return `₹ ${parseFloat(value || 0).toFixed(2)}`;
 };
@@ -34,9 +35,13 @@ export default function PaymentPageScreen() {
   const [payments, setPayments] = useState([]);
   const [modeFilter, setModeFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [fadeAnims, setFadeAnims] = useState<Animated.Value[]>([]);
+  const [shakeAnim] = useState(new Animated.Value(0));
+  const scrollViewRef = useRef<FlatList>(null);
 
   // Load user_id
   useEffect(() => {
@@ -50,7 +55,9 @@ export default function PaymentPageScreen() {
           throw new Error("No user ID found");
         }
       } catch (e) {
-        Alert.alert("Error", "Failed to load user information. Please log in again.");
+        Alert.alert("Error", "Failed to load user information. Please log in again.", [
+          { text: "OK", onPress: () => router.replace("/login") },
+        ]);
         setLoading(false);
       }
     })();
@@ -95,6 +102,41 @@ export default function PaymentPageScreen() {
     });
   }, [fadeAnims]);
 
+  // Handle date selection
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === "ios"); // Keep picker open on iOS until dismissed
+    if (selectedDate) {
+      setDateFilter(formatDate(selectedDate));
+      setErrors((prev) => ({ ...prev, dateFilter: "" })); // Clear error on valid selection
+    }
+  };
+
+  // Validate filters
+  const validateFilters = () => {
+    const newErrors: { [key: string]: string } = {};
+    if (dateFilter && !/^\d{4}-\d{2}-\d{2}$/.test(dateFilter)) {
+      newErrors.dateFilter = "Enter a valid date (YYYY-MM-DD)";
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+      ]).start();
+      scrollViewRef.current?.scrollToOffset({ offset: 0, animated: true });
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Apply filters
+  const applyFilters = () => {
+    if (validateFilters()) {
+      // Filter logic is already handled by filteredPayments
+      console.log("Filters applied:", { modeFilter, dateFilter });
+    } else {
+      Alert.alert("Error", "Please correct the date filter.");
+    }
+  };
+
   // Render payment card
   const renderPayment = ({ item, index }) => (
     <Animated.View style={[styles.card, { opacity: fadeAnims[index] || 1 }]}>
@@ -115,6 +157,7 @@ export default function PaymentPageScreen() {
             })
           }
           activeOpacity={0.8}
+          accessibilityLabel={`View invoice ${item.invoice_number}`}
         >
           <Ionicons name="document-text-outline" size={18} color="#fff" />
           <Text style={styles.actionText}> Invoice</Text>
@@ -144,34 +187,63 @@ export default function PaymentPageScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.headerArea}>
-        
         <TouchableOpacity
           style={styles.createBtn}
           onPress={() => router.push("/dashboard")}
           activeOpacity={0.8}
+          accessibilityLabel="Go back to dashboard"
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
-         </TouchableOpacity>
+        </TouchableOpacity>
         <Text style={styles.header}>Payment History</Text>
       </View>
 
       {/* Filters */}
-      <View style={{flexDirection:'row',paddingHorizontal:20,marginBottom:10}}>
+      <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 10 }}>
         <TextInput
-          style={[styles.input,{flex:1,marginRight:8}]}
+          style={[styles.input, { flex: 1, marginRight: 8 }]}
           placeholder="Filter mode"
           placeholderTextColor="#9ca3af"
           value={modeFilter}
           onChangeText={setModeFilter}
+          accessibilityLabel="Filter by payment mode"
         />
-        <TextInput
-          style={[styles.input,{flex:1}]}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#9ca3af"
-          value={dateFilter}
-          onChangeText={setDateFilter}
-        />
+        <Animated.View style={[styles.input, { flex: 1, transform: [{ translateX: shakeAnim }] }, errors.dateFilter && styles.inputError]}>
+          <TouchableOpacity
+            style={{ flex: 1, justifyContent: "center" }}
+            onPress={() => setShowDatePicker(true)}
+            accessibilityLabel="Select date filter"
+            accessibilityHint={errors.dateFilter ? `Error: ${errors.dateFilter}` : "Select a date in YYYY-MM-DD format"}
+          >
+            <Text style={[styles.inputText, !dateFilter && styles.placeholderText]}>
+              {dateFilter || "YYYY-MM-DD"}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
+      {errors.dateFilter && (
+        <Text
+          style={styles.errorText}
+          accessibilityRole="alert"
+          accessibilityLabel={`Error: ${errors.dateFilter}`}
+        >
+          {errors.dateFilter}
+        </Text>
+      )}
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={dateFilter ? new Date(dateFilter) : new Date()}
+          mode="date"
+          display={Platform.OS === "ios" ? "inline" : "default"}
+          onChange={onDateChange}
+          maximumDate={new Date()} // Restrict to past/present dates
+          textColor="#fff" // Match theme
+          style={Platform.OS === "ios" ? styles.iosDatePicker : null}
+          accessibilityLabel="Date picker for filtering payments"
+        />
+      )}
 
       {/* Payment List */}
       <FlatList
@@ -189,6 +261,7 @@ export default function PaymentPageScreen() {
             colors={["#38bdf8"]}
           />
         }
+        ref={scrollViewRef}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="wallet-outline" size={48} color="#9ca3af" />
@@ -198,7 +271,7 @@ export default function PaymentPageScreen() {
         }
       />
       <Text style={styles.totalText}>
-        Total: {formatCurrency(filteredPayments.reduce((sum,p) => sum + parseFloat(p.amount || 0), 0))}
+        Total: {formatCurrency(filteredPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0))}
       </Text>
     </SafeAreaView>
   );
@@ -337,6 +410,24 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     height: 40,
   },
+  inputError: {
+    borderColor: "#ef4444",
+    borderWidth: 2,
+  },
+  inputText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  placeholderText: {
+    color: "#9ca3af",
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 12,
+    marginBottom: 8,
+    marginLeft: 20,
+  },
   totalText: {
     color: "#38bdf8",
     fontSize: 16,
@@ -344,5 +435,10 @@ const styles = StyleSheet.create({
     textAlign: "right",
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  iosDatePicker: {
+    backgroundColor: "#23272f",
+    borderRadius: 8,
+    padding: 10,
   },
 });

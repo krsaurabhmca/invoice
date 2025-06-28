@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
 import * as Linking from "expo-linking";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { fontSizes } from "./theme";
 
 // Utility function to format currency
 const formatCurrency = (value) => {
@@ -312,7 +311,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   header: {
-    fontSize: fontSizes.header,
+    fontSize: 18,
     fontWeight: "700",
     color: "#fff",
     textAlign: "center",

@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { fontSizes } from "./theme";
+import { networkErrorMessage } from "./utils";
 
 export default function AddClientScreen() {
   const [userId, setUserId] = useState(null);
@@ -30,6 +30,14 @@ export default function AddClientScreen() {
   const [errors, setErrors] = useState({});
   const [fadeAnim] = useState(new Animated.Value(0));
   const [cardAnim] = useState(new Animated.Value(50));
+  const shakeAnims = useRef({
+    name: new Animated.Value(0),
+    email: new Animated.Value(0),
+    phone: new Animated.Value(0),
+    address: new Animated.Value(0),
+    gst: new Animated.Value(0),
+  }).current;
+  const scrollViewRef = useRef(null);
   const router = useRouter();
 
   // Load user_id and animate
@@ -69,6 +77,29 @@ export default function AddClientScreen() {
       newErrors.gst = "Enter a valid GST number";
     }
     setErrors(newErrors);
+
+    // Trigger shake animation for fields with errors
+    Object.keys(newErrors).forEach((key) => {
+      Animated.sequence([
+        Animated.timing(shakeAnims[key], { toValue: 10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnims[key], { toValue: -10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnims[key], { toValue: 0, duration: 100, useNativeDriver: true }),
+      ]).start();
+    });
+
+    // Scroll to the first error
+    if (Object.keys(newErrors).length > 0) {
+      const firstErrorField = Object.keys(newErrors)[0];
+      const fieldPositions = {
+        name: 0,
+        email: 60,
+        phone: 120,
+        address: 180,
+        gst: 240,
+      };
+      scrollViewRef.current?.scrollTo({ y: fieldPositions[firstErrorField], animated: true });
+    }
+
     return Object.keys(newErrors).length === 0;
   };
 
@@ -116,7 +147,11 @@ export default function AddClientScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: cardAnim }] }]}>
             {/* Header */}
             <View style={styles.header}>
@@ -128,7 +163,7 @@ export default function AddClientScreen() {
             </View>
 
             {/* Inputs */}
-            <View style={[styles.inputRow, errors.name && styles.inputError]}>
+            <Animated.View style={[styles.inputRow, errors.name && styles.inputError, { transform: [{ translateX: shakeAnims.name }] }]}>
               <Ionicons name="storefront-outline" size={20} color="#9ca3af" style={styles.icon} />
               <TextInput
                 style={styles.input}
@@ -138,11 +173,20 @@ export default function AddClientScreen() {
                 onChangeText={setName}
                 autoCapitalize="words"
                 accessibilityLabel="Business Name input"
+                accessibilityHint={errors.name ? `Error: ${errors.name}` : "Enter business name"}
               />
-            </View>
-            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+            </Animated.View>
+            {errors.name && (
+              <Text
+                style={styles.errorText}
+                accessibilityRole="alert"
+                accessibilityLabel={`Error: ${errors.name}`}
+              >
+                {errors.name}
+              </Text>
+            )}
 
-            <View style={[styles.inputRow, errors.email && styles.inputError]}>
+            <Animated.View style={[styles.inputRow, errors.email && styles.inputError, { transform: [{ translateX: shakeAnims.email }] }]}>
               <Ionicons name="mail-outline" size={20} color="#9ca3af" style={styles.icon} />
               <TextInput
                 style={styles.input}
@@ -153,11 +197,20 @@ export default function AddClientScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 accessibilityLabel="Email input"
+                accessibilityHint={errors.email ? `Error: ${errors.email}` : "Enter email address"}
               />
-            </View>
-            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+            </Animated.View>
+            {errors.email && (
+              <Text
+                style={styles.errorText}
+                accessibilityRole="alert"
+                accessibilityLabel={`Error: ${errors.email}`}
+              >
+                {errors.email}
+              </Text>
+            )}
 
-            <View style={[styles.inputRow, errors.phone && styles.inputError]}>
+            <Animated.View style={[styles.inputRow, errors.phone && styles.inputError, { transform: [{ translateX: shakeAnims.phone }] }]}>
               <Ionicons name="call-outline" size={20} color="#9ca3af" style={styles.icon} />
               <TextInput
                 style={styles.input}
@@ -168,11 +221,20 @@ export default function AddClientScreen() {
                 keyboardType="number-pad"
                 maxLength={10}
                 accessibilityLabel="Phone input"
+                accessibilityHint={errors.phone ? `Error: ${errors.phone}` : "Enter phone number"}
               />
-            </View>
-            {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+            </Animated.View>
+            {errors.phone && (
+              <Text
+                style={styles.errorText}
+                accessibilityRole="alert"
+                accessibilityLabel={`Error: ${errors.phone}`}
+              >
+                {errors.phone}
+              </Text>
+            )}
 
-            <View style={[styles.inputRow, errors.address && styles.inputError]}>
+            <Animated.View style={[styles.inputRow, errors.address && styles.inputError, { transform: [{ translateX: shakeAnims.address }] }]}>
               <Ionicons name="map-outline" size={20} color="#9ca3af" style={styles.icon} />
               <TextInput
                 style={styles.input}
@@ -182,11 +244,20 @@ export default function AddClientScreen() {
                 onChangeText={setAddress}
                 autoCapitalize="sentences"
                 accessibilityLabel="Address input"
+                accessibilityHint={errors.address ? `Error: ${errors.address}` : "Enter address"}
               />
-            </View>
-            {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+            </Animated.View>
+            {errors.address && (
+              <Text
+                style={styles.errorText}
+                accessibilityRole="alert"
+                accessibilityLabel={`Error: ${errors.address}`}
+              >
+                {errors.address}
+              </Text>
+            )}
 
-            <View style={[styles.inputRow, errors.gst && styles.inputError]}>
+            <Animated.View style={[styles.inputRow, errors.gst && styles.inputError, { transform: [{ translateX: shakeAnims.gst }] }]}>
               <Ionicons name="document-text-outline" size={20} color="#9ca3af" style={styles.icon} />
               <TextInput
                 style={styles.input}
@@ -197,9 +268,18 @@ export default function AddClientScreen() {
                 autoCapitalize="characters"
                 maxLength={15}
                 accessibilityLabel="GST Number input"
+                accessibilityHint={errors.gst ? `Error: ${errors.gst}` : "Enter GST number"}
               />
-            </View>
-            {errors.gst && <Text style={styles.errorText}>{errors.gst}</Text>}
+            </Animated.View>
+            {errors.gst && (
+              <Text
+                style={styles.errorText}
+                accessibilityRole="alert"
+                accessibilityLabel={`Error: ${errors.gst}`}
+              >
+                {errors.gst}
+              </Text>
+            )}
 
             {/* Buttons */}
             <View style={styles.buttonRow}>

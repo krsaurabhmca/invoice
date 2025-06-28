@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { networkErrorMessage } from "./utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,8 +19,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { fontSizes } from "./theme";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { fontSizes } from "./theme";
+import { networkErrorMessage } from "./utils";
 
 const USER_STORAGE_KEY = "@invoiceApp:user";
 
@@ -58,6 +58,13 @@ export default function UpdateProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [cardAnim] = useState(new Animated.Value(50));
+  const shakeAnims = useRef({
+    name: new Animated.Value(0),
+    email: new Animated.Value(0),
+    phone: new Animated.Value(0),
+    gst_number: new Animated.Value(0),
+  }).current;
+  const scrollViewRef = useRef<ScrollView>(null);
   const router = useRouter();
 
   // Fetch user and profile
@@ -75,21 +82,23 @@ export default function UpdateProfileScreen() {
 
       const res = await fetch(`https://offerplant.com/invoice/get_profile.php?user_id=${user.id}`);
       const data = await res.json();
+      console.log(data);
       if (res.ok && data.status === "success") {
         setProfile({
-          name: data.profile.name || "",
-          email: data.profile.email || "",
-          phone: data.profile.phone || "",
-          company_name: data.profile.company_name || "",
-          gst_number: data.profile.gst_number || "",
-          bank_details: data.profile.bank_details || "",
-          logo: data.profile.logo ? { uri: `https://offerplant.com/invoice/uploads/${data.profile.logo}` } : null,
+          name: data.name || "",
+          email: data.email || "",
+          phone: data.phone || "",
+          company_name: data.company_name || "",
+          gst_number: data.gst_number || "",
+          bank_details: data.bank_details || "",
+          logo: data.logo ? { uri: `https://offerplant.com/invoice/${data.logo}` } : null,
         });
       } else {
         throw new Error(data.message || "Failed to load profile.");
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message, [
+      console.log("Error", e);
+      Alert.alert("Error", e.message || "Could not load profile.", [
         { text: "OK", onPress: () => router.replace("/login") },
       ]);
     } finally {
@@ -184,6 +193,28 @@ export default function UpdateProfileScreen() {
     if (!profile.phone || !validatePhone(profile.phone)) newErrors.phone = "Enter a valid 10-digit phone number";
     if (profile.gst_number && !validateGST(profile.gst_number)) newErrors.gst_number = "Enter a valid GST number";
     setErrors(newErrors);
+
+    // Trigger shake animation for fields with errors
+    Object.keys(newErrors).forEach((key) => {
+      Animated.sequence([
+        Animated.timing(shakeAnims[key], { toValue: 10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnims[key], { toValue: -10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnims[key], { toValue: 0, duration: 100, useNativeDriver: true }),
+      ]).start();
+    });
+
+    // Scroll to the first error
+    if (Object.keys(newErrors).length > 0) {
+      const firstErrorField = Object.keys(newErrors)[0];
+      const fieldPositions = {
+        name: 150, // Adjusted for logo picker height
+        email: 210,
+        phone: 270,
+        gst_number: 390,
+      };
+      scrollViewRef.current?.scrollTo({ y: fieldPositions[firstErrorField], animated: true });
+    }
+
     return Object.keys(newErrors).length === 0;
   };
 
@@ -213,7 +244,7 @@ export default function UpdateProfileScreen() {
               bank_details: profile.bank_details,
               logo: logoPath || "",
             };
-
+            console.log(payload);
             const response = await fetch("https://offerplant.com/invoice/update_profile.php", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -267,10 +298,16 @@ export default function UpdateProfileScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#38bdf8" />
             }
+            ref={scrollViewRef}
+            showsVerticalScrollIndicator={false}
           >
             {/* Header */}
             <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-              <TouchableOpacity onPress={() => router.push("/dashboard")} style={styles.backButton}>
+              <TouchableOpacity
+                onPress={() => router.push("/dashboard")}
+                style={styles.backButton}
+                accessibilityLabel="Go back to dashboard"
+              >
                 <Ionicons name="arrow-back-outline" size={24} color="#facc15" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Update Profile</Text>
@@ -291,11 +328,21 @@ export default function UpdateProfileScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.imageButtons}>
-                  <TouchableOpacity onPress={pickImage} style={styles.imageButton} disabled={uploading}>
+                  <TouchableOpacity
+                    onPress={pickImage}
+                    style={styles.imageButton}
+                    disabled={uploading}
+                    accessibilityLabel="Upload logo"
+                  >
                     <Text style={styles.imageButtonText}>Upload Logo</Text>
                   </TouchableOpacity>
                   {profile.logo && (
-                    <TouchableOpacity onPress={clearLogo} style={[styles.imageButton, styles.clearImageButton]} disabled={uploading}>
+                    <TouchableOpacity
+                      onPress={clearLogo}
+                      style={[styles.imageButton, styles.clearImageButton]}
+                      disabled={uploading}
+                      accessibilityLabel="Clear logo"
+                    >
                       <Text style={[styles.imageButtonText, styles.clearImageButtonText]}>Clear Logo</Text>
                     </TouchableOpacity>
                   )}
@@ -303,7 +350,7 @@ export default function UpdateProfileScreen() {
               </View>
 
               {/* Form Fields */}
-              <View style={[styles.inputRow, errors.name && styles.inputError]}>
+              <Animated.View style={[styles.inputRow, errors.name && styles.inputError, { transform: [{ translateX: shakeAnims.name }] }]}>
                 <Ionicons name="person-outline" size={20} color="#9ca3af" style={styles.icon} />
                 <TextInput
                   style={styles.input}
@@ -311,12 +358,21 @@ export default function UpdateProfileScreen() {
                   placeholderTextColor="#9ca3af"
                   value={profile.name}
                   onChangeText={(text) => setProfile({ ...profile, name: text })}
-                  accessibilityLabel="Name"
+                  accessibilityLabel="Name input"
+                  accessibilityHint={errors.name ? `Error: ${errors.name}` : "Enter your name"}
                 />
-              </View>
-              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+              </Animated.View>
+              {errors.name && (
+                <Text
+                  style={styles.errorText}
+                  accessibilityRole="alert"
+                  accessibilityLabel={`Error: ${errors.name}`}
+                >
+                  {errors.name}
+                </Text>
+              )}
 
-              <View style={[styles.inputRow, errors.email && styles.inputError]}>
+              <Animated.View style={[styles.inputRow, errors.email && styles.inputError, { transform: [{ translateX: shakeAnims.email }] }]}>
                 <Ionicons name="mail-outline" size={20} color="#9ca3af" style={styles.icon} />
                 <TextInput
                   style={styles.input}
@@ -326,12 +382,21 @@ export default function UpdateProfileScreen() {
                   onChangeText={(text) => setProfile({ ...profile, email: text })}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  accessibilityLabel="Email"
+                  accessibilityLabel="Email input"
+                  accessibilityHint={errors.email ? `Error: ${errors.email}` : "Enter your email"}
                 />
-              </View>
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              </Animated.View>
+              {errors.email && (
+                <Text
+                  style={styles.errorText}
+                  accessibilityRole="alert"
+                  accessibilityLabel={`Error: ${errors.email}`}
+                >
+                  {errors.email}
+                </Text>
+              )}
 
-              <View style={[styles.inputRow, errors.phone && styles.inputError]}>
+              <Animated.View style={[styles.inputRow, errors.phone && styles.inputError, { transform: [{ translateX: shakeAnims.phone }] }]}>
                 <Ionicons name="call-outline" size={20} color="#9ca3af" style={styles.icon} />
                 <TextInput
                   style={styles.input}
@@ -340,10 +405,20 @@ export default function UpdateProfileScreen() {
                   value={profile.phone}
                   onChangeText={(text) => setProfile({ ...profile, phone: text })}
                   keyboardType="numeric"
-                  accessibilityLabel="Phone number"
+                  maxLength={10}
+                  accessibilityLabel="Phone number input"
+                  accessibilityHint={errors.phone ? `Error: ${errors.phone}` : "Enter your phone number"}
                 />
-              </View>
-              {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+              </Animated.View>
+              {errors.phone && (
+                <Text
+                  style={styles.errorText}
+                  accessibilityRole="alert"
+                  accessibilityLabel={`Error: ${errors.phone}`}
+                >
+                  {errors.phone}
+                </Text>
+              )}
 
               <View style={styles.inputRow}>
                 <Ionicons name="business-outline" size={20} color="#9ca3af" style={styles.icon} />
@@ -353,23 +428,34 @@ export default function UpdateProfileScreen() {
                   placeholderTextColor="#9ca3af"
                   value={profile.company_name}
                   onChangeText={(text) => setProfile({ ...profile, company_name: text })}
-                  accessibilityLabel="Company name"
+                  accessibilityLabel="Company name input"
+                  accessibilityHint="Enter your company name (optional)"
                 />
               </View>
 
-              <View style={[styles.inputRow, errors.gst_number && styles.inputError]}>
+              <Animated.View style={[styles.inputRow, errors.gst_number && styles.inputError, { transform: [{ translateX: shakeAnims.gst_number }] }]}>
                 <Ionicons name="document-text-outline" size={20} color="#9ca3af" style={styles.icon} />
                 <TextInput
                   style={styles.input}
                   placeholder="GST Number (optional)"
                   placeholderTextColor="#9ca3af"
                   value={profile.gst_number}
-                  onChangeText={(text) => setProfile({ ...profile, gst_number: text })}
+                  onChangeText={(text) => setProfile({ ...profile, gst_number: text.toUpperCase() })}
                   autoCapitalize="characters"
-                  accessibilityLabel="GST number"
+                  maxLength={15}
+                  accessibilityLabel="GST number input"
+                  accessibilityHint={errors.gst_number ? `Error: ${errors.gst_number}` : "Enter your GST number (optional)"}
                 />
-              </View>
-              {errors.gst_number && <Text style={styles.errorText}>{errors.gst_number}</Text>}
+              </Animated.View>
+              {errors.gst_number && (
+                <Text
+                  style={styles.errorText}
+                  accessibilityRole="alert"
+                  accessibilityLabel={`Error: ${errors.gst_number}`}
+                >
+                  {errors.gst_number}
+                </Text>
+              )}
 
               <View style={styles.inputRow}>
                 <Ionicons name="card-outline" size={20} color="#9ca3af" style={styles.icon} />
@@ -380,7 +466,8 @@ export default function UpdateProfileScreen() {
                   value={profile.bank_details}
                   onChangeText={(text) => setProfile({ ...profile, bank_details: text })}
                   multiline
-                  accessibilityLabel="Bank details"
+                  accessibilityLabel="Bank details input"
+                  accessibilityHint="Enter your bank details (optional)"
                 />
               </View>
             </Animated.View>
@@ -495,7 +582,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#ef4444",
   },
-  imageButtonText: {
+  imageButton_warnsText: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",

@@ -156,7 +156,7 @@ export default function ManageClientsScreen() {
               Due: <Text style={styles.infoValue}>{item.due}</Text>
             </Text>
           )}
-          <Text style={styles.created}>Added: {item.created_at}</Text>
+          {/* <Text style={styles.created}>Added: {item.created_at}</Text> */}
         </View>
         <View style={styles.actions}>
           <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionBtn}>
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   cardContent: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: 8,
   },
   avatar: {
     width: 40,

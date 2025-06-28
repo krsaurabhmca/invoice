@@ -13,5 +13,5 @@ export const fonts = {
 };
 
 export const fontSizes = {
-  header: 24,
+  header: 20,
 };
